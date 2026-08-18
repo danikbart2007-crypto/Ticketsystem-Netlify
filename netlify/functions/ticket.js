@@ -45,6 +45,7 @@ exports.handler = async (event) => {
 <h1>Ticket von ${S.esc(t.name)}</h1>
 <div class="card">
   <p class="meta">Eingegangen am ${S.fmtDate(t.created_at)}</p>
+  ${t.contact ? `<label>Kontakt</label><div class="msgbox">${S.contactLink(t.contact)}</div>` : ''}
   ${t.message ? `<label>Nachricht</label><div class="msgbox">${S.esc(t.message)}</div>` : ''}
   ${rows.length ? `<label>Angehängte Dokumente (${rows.length})</label>
      <ul class="files">${rows.join('')}</ul>` : ''}
