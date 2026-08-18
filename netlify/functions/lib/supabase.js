@@ -31,12 +31,28 @@ function newId(bytes = 12) {
 /* ---------------------------------------------------------------- Datenbank */
 
 async function dbInsert(row) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
+  let r = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
     method: 'POST',
     headers: { ...dbHeaders, Prefer: 'return=representation' },
     body: JSON.stringify(row),
   });
-  if (!r.ok) throw new Error(`DB-Insert fehlgeschlagen (${r.status}): ${await r.text()}`);
+  if (!r.ok) {
+    const text = await r.text();
+    // Ältere Tabelle ohne Spalte "contact": einmalig ohne dieses Feld versuchen
+    if (/contact/i.test(text) && 'contact' in row) {
+      console.warn('Spalte "contact" fehlt in der Tabelle – Migration ausführen! '
+        + 'Ticket wird vorerst ohne Kontaktangabe gespeichert.');
+      const { contact, ...rest } = row;
+      rest.message = contact ? `[Kontakt: ${contact}]\n\n${rest.message || ''}` : rest.message;
+      r = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
+        method: 'POST',
+        headers: { ...dbHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify(rest),
+      });
+      if (r.ok) return (await r.json())[0];
+    }
+    throw new Error(`DB-Insert fehlgeschlagen (${r.status}): ${text}`);
+  }
   return (await r.json())[0];
 }
 
@@ -134,10 +150,11 @@ async function cleanup(force = false) {
 
 /* --------------------------------------------------------------- Benachrichtigung */
 
-async function sendTelegram(ticketId, name, numFiles, baseUrl) {
+async function sendTelegram(ticketId, name, numFiles, baseUrl, contact) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return false;
   const link = `${baseUrl.replace(/\/$/, '')}/ticket/${ticketId}`;
   let text = `🎫 Neues Ticket von ${name}`;
+  if (contact) text += `\n📞 ${contact}`;
   if (numFiles) text += `\n📎 ${numFiles} Datei(en) angehängt`;
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -172,6 +189,21 @@ async function sendTelegram(ticketId, name, numFiles, baseUrl) {
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Kontaktangabe anklickbar machen: Mail -> mailto, Telefon -> tel. */
+function contactLink(value) {
+  const v = String(value || '').trim();
+  if (!v) return '';
+  const safe = esc(v);
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+    return `<a href="mailto:${encodeURI(v)}" style="color:#ffd166">${safe}</a>`;
+  }
+  const digits = v.replace(/[^\d+]/g, '');
+  if (digits.length >= 6 && /^\+?[\d\s/()-]+$/.test(v)) {
+    return `<a href="tel:${encodeURI(digits)}" style="color:#ffd166">${safe}</a>`;
+  }
+  return safe;
 }
 
 function fmtDate(iso) {
@@ -268,6 +300,6 @@ function baseUrlFrom(event) {
 module.exports = {
   configured, newId, dbInsert, dbGet, dbUpdate, dbList, dbDelete,
   signedUploadUrl, signedDownloadUrl, deleteFiles, cleanup, sendTelegram,
-  esc, fmtDate, fmtSize, page, html, json, notFound, keyMatches, baseUrlFrom,
+  esc, contactLink, fmtDate, fmtSize, page, html, json, notFound, keyMatches, baseUrlFrom,
   DELETE_AFTER_DAYS, BUCKET,
 };
