@@ -41,6 +41,10 @@ progress{width:100%;height:.6rem;margin-top:1rem}
       <label for="name">Dein Name</label>
       <input type="text" id="name" placeholder="z. B. Max Mustermann" required>
 
+      <label for="contact">E-Mail oder Telefonnummer</label>
+      <input type="text" id="contact" placeholder="z. B. max@beispiel.de oder 0171 1234567" required>
+      <p class="hint">Damit wir dich zu deinem Anliegen erreichen können.</p>
+
       <label for="message">Nachricht</label>
       <textarea id="message" placeholder="Worum geht es?"></textarea>
 
@@ -88,11 +92,14 @@ function uploadFile(url, file) {
 
 $('send').addEventListener('click', async () => {
   const name = $('name').value.trim();
+  const contact = $('contact').value.trim();
   const message = $('message').value.trim();
   const files = Array.from($('files').files);
 
   $('error').classList.add('hidden');
   if (!name) return showError('Bitte deinen Namen eintragen.');
+  if (!contact) return showError('Bitte eine E-Mail-Adresse oder Telefonnummer eintragen.');
+  if (contact.length < 5) return showError('Die Kontaktangabe wirkt unvollständig.');
   if (!message && files.length === 0) {
     return showError('Bitte eine Nachricht schreiben oder mindestens eine Datei anhängen.');
   }
@@ -106,7 +113,7 @@ $('send').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name, message,
+        name, contact, message,
         files: files.map((f) => ({ name: f.name, size: f.size })),
       }),
     });
