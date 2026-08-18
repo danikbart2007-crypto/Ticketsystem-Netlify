@@ -19,3 +19,8 @@
   from = "/admin/*"
   to = "/.netlify/functions/admin"
   status = 200
+
+[[redirects]]
+  from = "/diag/*"
+  to = "/.netlify/functions/diag"
+  status = 200
