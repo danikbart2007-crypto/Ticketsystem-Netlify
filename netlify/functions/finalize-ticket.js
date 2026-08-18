@@ -27,7 +27,8 @@ exports.handler = async (event) => {
   let files = ticket.files || [];
   if (failed.length) files = files.filter((f) => !failed.includes(f.stored));
 
-  const pushed = await S.sendTelegram(id, ticket.name, files.length, S.baseUrlFrom(event));
+  const pushed = await S.sendTelegram(id, ticket.name, files.length,
+    S.baseUrlFrom(event), ticket.contact);
 
   await S.dbUpdate(id, { files, complete: true, pushed }).catch((e) => {
     console.error('finalize-ticket update:', e.message);
