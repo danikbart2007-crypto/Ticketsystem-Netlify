@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket einreichen</title>
+<style>
+:root{--bg:#10141c;--card:#1a2130;--line:#2b3446;--text:#e8ecf4;--muted:#93a0b8;--accent:#ffd166;--accent-ink:#1a1405}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;justify-content:center;padding:2rem 1rem 4rem}
+main{width:100%;max-width:560px}
+.brand{font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+h1{font-size:1.6rem;margin:0 0 1.5rem;line-height:1.25}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.4rem}
+label{display:block;font-size:.9rem;color:var(--muted);margin:1rem 0 .35rem}
+label:first-of-type{margin-top:0}
+input[type=text],textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:.65rem .75rem;font:inherit}
+textarea{min-height:130px;resize:vertical}
+input:focus,textarea:focus,.filebox:focus-within{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.filebox{border:1.5px dashed var(--line);border-radius:10px;padding:1rem;text-align:center;color:var(--muted);font-size:.9rem}
+.filebox input{width:100%;color:var(--muted)}
+.hint{font-size:.8rem;color:var(--muted);margin-top:.4rem}
+button,.btn{display:inline-block;margin-top:1.4rem;width:100%;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:.8rem 1rem;font:inherit;font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
+button:hover,.btn:hover{filter:brightness(1.07)}
+button[disabled]{opacity:.6;cursor:default}
+.error{background:#3a1c22;border:1px solid #6e2f3a;color:#ffb4c0;border-radius:8px;padding:.7rem .9rem;font-size:.9rem;margin-bottom:1rem}
+.ok{background:#16301f;border:1px solid #2c5c3c;color:#a8e6bd;border-radius:8px;padding:.7rem .9rem;font-size:.9rem;margin-bottom:1rem}
+progress{width:100%;height:.6rem;margin-top:1rem}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">Ticketsystem</p>
+
+  <div id="formView">
+    <h1>Neues Ticket einreichen</h1>
+    <div class="card">
+      <div id="error" class="error hidden"></div>
+
+      <label for="name">Dein Name</label>
+      <input type="text" id="name" placeholder="z. B. Max Mustermann" required>
+
+      <label for="message">Nachricht</label>
+      <textarea id="message" placeholder="Worum geht es?"></textarea>
+
+      <label for="files">Dokumente anhängen (optional)</label>
+      <div class="filebox"><input type="file" id="files" multiple></div>
+      <p class="hint">Beliebig viele Dateien, maximal 50 MB pro Datei.</p>
+
+      <button id="send" type="button">Ticket absenden</button>
+      <progress id="bar" class="hidden" max="100" value="0"></progress>
+      <p id="status" class="hint"></p>
+    </div>
+  </div>
+
+  <div id="doneView" class="hidden">
+    <h1>Ticket eingegangen ✓</h1>
+    <div class="card">
+      <div id="pushInfo"></div>
+      <a class="btn" href="/">Weiteres Ticket einreichen</a>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function showError(msg) {
+  $('error').textContent = msg;
+  $('error').classList.remove('hidden');
+  $('send').disabled = false;
+  $('bar').classList.add('hidden');
+  $('status').textContent = '';
+}
+
+/** Eine Datei per signierter Adresse direkt zu Supabase hochladen. */
+function uploadFile(url, file) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.send(file);
+  });
+}
+
+$('send').addEventListener('click', async () => {
+  const name = $('name').value.trim();
+  const message = $('message').value.trim();
+  const files = Array.from($('files').files);
+
+  $('error').classList.add('hidden');
+  if (!name) return showError('Bitte deinen Namen eintragen.');
+  if (!message && files.length === 0) {
+    return showError('Bitte eine Nachricht schreiben oder mindestens eine Datei anhängen.');
+  }
+
+  $('send').disabled = true;
+  $('status').textContent = 'Ticket wird angelegt …';
+
+  let created;
+  try {
+    const r = await fetch('/api/create-ticket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, message,
+        files: files.map((f) => ({ name: f.name, size: f.size })),
+      }),
+    });
+    created = await r.json();
+    if (!r.ok) return showError(created.error || 'Ticket konnte nicht angelegt werden.');
+  } catch {
+    return showError('Keine Verbindung zum Server. Bitte später erneut versuchen.');
+  }
+
+  // Dateien direkt zu Supabase hochladen
+  const failed = [];
+  if (files.length) {
+    $('bar').classList.remove('hidden');
+    for (let i = 0; i < files.length; i++) {
+      $('status').textContent = `Lade Datei ${i + 1} von ${files.length}: ${files[i].name}`;
+      const target = created.uploads[i];
+      const ok = target ? await uploadFile(target.url, files[i]) : false;
+      if (!ok && target) failed.push(target.stored);
+      $('bar').value = Math.round(((i + 1) / files.length) * 100);
+    }
+  }
+
+  $('status').textContent = 'Benachrichtigung wird verschickt …';
+  let pushed = false;
+  try {
+    const r = await fetch('/api/finalize-ticket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: created.id, failed }),
+    });
+    pushed = (await r.json()).pushed;
+  } catch { /* Ticket ist gespeichert, nur der Push fehlt */ }
+
+  let info = pushed
+    ? '<p>Dein Ticket wurde gespeichert und der Empfänger sofort benachrichtigt.</p>'
+    : '<p>Dein Ticket wurde gespeichert. Die Benachrichtigung konnte gerade nicht zugestellt werden – das Ticket geht aber nicht verloren.</p>';
+  if (failed.length) {
+    info += `<div class="error">${failed.length} Datei(en) konnten nicht hochgeladen werden.
+             Bitte diese erneut als eigenes Ticket einreichen.</div>`;
+  }
+  $('pushInfo').innerHTML = info;
+  $('formView').classList.add('hidden');
+  $('doneView').classList.remove('hidden');
+});
+</script>
+</body>
+</html>

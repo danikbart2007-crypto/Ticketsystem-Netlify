@@ -1,0 +1,21 @@
+# Netlify-Konfiguration für das Ticketsystem
+
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# Kurze, sprechende Adressen auf die Functions umleiten
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/ticket/*"
+  to = "/.netlify/functions/ticket"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/.netlify/functions/admin"
+  status = 200
