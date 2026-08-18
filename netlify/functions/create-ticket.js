@@ -24,9 +24,13 @@ exports.handler = async (event) => {
   }
 
   const name = String(payload.name || '').trim().slice(0, 120) || 'Unbekannt';
+  const contact = String(payload.contact || '').trim().slice(0, 200);
   const message = String(payload.message || '').trim().slice(0, 20000);
   const incoming = Array.isArray(payload.files) ? payload.files : [];
 
+  if (!contact) {
+    return S.json({ error: 'Bitte eine E-Mail-Adresse oder Telefonnummer angeben.' }, 400);
+  }
   if (!message && incoming.length === 0) {
     return S.json({ error: 'Bitte eine Nachricht schreiben oder eine Datei anhängen.' }, 400);
   }
@@ -52,6 +56,7 @@ exports.handler = async (event) => {
     await S.dbInsert({
       id,
       name,
+      contact,
       message,
       files,
       created_at: new Date().toISOString(),
