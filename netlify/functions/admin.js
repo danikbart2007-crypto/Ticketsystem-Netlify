@@ -29,7 +29,9 @@ exports.handler = async (event) => {
       : '';
     return `<div class="card">
       <p class="meta">${S.fmtDate(t.created_at)} · ${flags.join(' · ')}</p>
-      <strong>${S.esc(t.name)}</strong>${preview}
+      <strong>${S.esc(t.name)}</strong>
+      ${t.contact ? `<div class="hint" style="margin-top:.2rem">${S.contactLink(t.contact)}</div>` : ''}
+      ${preview}
       <a class="btn" href="/ticket/${encodeURIComponent(t.id)}">Ticket öffnen</a>
     </div>`;
   }).join('');
